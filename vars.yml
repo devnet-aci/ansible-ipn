@@ -41,8 +41,8 @@ loopback_interface:
 rp:
   - address: 192.168.100.2
     grouplist:
-      - 225.0.0.0/15
-      - 239.255.255.240/28
+      - 225.0.0.0/8
+      - 239.0.0.0/8
 
 ospf:
   - process_id: 1
