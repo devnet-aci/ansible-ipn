@@ -168,6 +168,18 @@
       with_items:
       -  "{{ loopback_interface  + wan_interfaces + sub_interfaces }}"
 
+## Colocando custo no OSPF na sub-interface ###
+
+    - name: Configurando RP Address na vRF
+      cisco.nxos.nxos_command:
+        commands:
+          - configure terminal
+          - interface {{ item.name }}
+          - ip ospf cost {{ item.cost }}
+      when: item.cost is defined
+      with_items:
+      -  "{{ sub_interfaces }}"
+
 ## DHCP RELAY ###
     - name: Configurando DHCP relay nas sub_interfaces
       cisco.nxos.nxos_command:
