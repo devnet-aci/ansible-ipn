@@ -170,7 +170,7 @@
 
 ### OSPF COST ON SUBINTERFACE ###
 
-    - name: Configurando RP Address na vRF
+    - name: Configurando custo no OSPF
       cisco.nxos.nxos_command:
         commands:
           - configure terminal
