@@ -168,7 +168,7 @@
       with_items:
       -  "{{ loopback_interface  + wan_interfaces + sub_interfaces }}"
 
-### OSPF COST ON SUBINTERFACE ###
+## OSPF COST ON SUBINTERFACE ##
 
     - name: Configurando custo no OSPF
       cisco.nxos.nxos_command:
@@ -180,7 +180,7 @@
       with_items:
       -  "{{ sub_interfaces }}"
 
-## DHCP RELAY ###
+## DHCP RELAY (ONLY POD 2) ###
     - name: Configurando DHCP relay nas sub_interfaces
       cisco.nxos.nxos_command:
         commands:
