@@ -1,0 +1,180 @@
+---
+- name: Configurando o "NX-OS InterPod Network"
+  hosts: all
+  gather_facts: no
+  connection: network_cli
+
+  vars_files:
+    - vars.yml
+
+  tasks:
+### FEATURES ###
+    - name: Ativando as Features necessárias
+      cisco.nxos.nxos_feature:
+        feature: "{{ item }}"
+        state: enabled
+      loop: "{{ features }}"
+      when: ansible_network_os == 'cisco.nxos.nxos'
+
+### ADD VLAN 4 ###
+    - name: Adicionando a vLAN 4
+      cisco.nxos.nxos_vlans:
+        config:
+        - vlan_id: 4
+          name: mpod_vlan
+
+### CREATE VRF ###
+    - name: Criando uma vRF exclusiva para o mpod
+      cisco.nxos.nxos_vrf:
+        name: "{{ item.name }}"
+        description: "{{ item.description }}"
+        state: present
+      loop: "{{ vRF }}"
+
+## CONFIG L3 INTERFACE ###
+    - name: Configurando as interfaces como L3
+      cisco.nxos.nxos_interfaces:
+        config:
+          - name: "{{ item.name }}"
+            description: "{{ item.description }}"
+            enabled: true
+            mode: layer3
+            mtu: 9150
+      loop: "{{ physical_interfaces + wan_interfaces }}"
+
+## BIND VRF ON INTERFACES ###
+    - name: Associando a vRF nas interfaces
+      cisco.nxos.nxos_vrf_interface:
+        vrf: "{{ vRF[0].name }}"
+        interface: "{{ item.name }}"
+      loop: "{{ physical_interfaces + wan_interfaces }}"
+
+### ADD IPv4 ON WAN INTERFACES ###
+    - name: Adicionando IPv4 nas interfaces WAN
+      cisco.nxos.nxos_l3_interfaces:
+        config:
+          - name: "{{ item.name }}"
+            ipv4:
+              - address: "{{ item.ipv4 }}"
+      with_items:
+        -  "{{ wan_interfaces }}"
+
+### CREATE SUB INTERFACE ###
+    - name: Criando sub-interfaces
+      cisco.nxos.nxos_l3_interfaces:
+        config:
+          - name: "{{ item.name }}"
+            dot1q: 4
+        state: merged
+      with_items:
+        -  "{{ sub_interfaces }}"
+
+    - name: Subindo as sub-interfaces
+      cisco.nxos.nxos_command:
+        commands:
+          - configure terminal
+          - interface {{ item.name }}
+          - no shutdown
+      with_items:
+        -  "{{ sub_interfaces }}"
+
+### BIND VRF ON SUB-INTERFACE
+    - name: Associando a vRF nas subinterfaces
+      cisco.nxos.nxos_vrf_interface:
+        vrf: "{{ vRF[0].name }}"
+        interface: "{{ item.name }}"
+      loop: "{{ sub_interfaces }}"
+
+### ADD IPv4 SUB-INTERFACE
+    - name: Adicionando IPv4 nas sub-interfaces
+      cisco.nxos.nxos_l3_interfaces:
+        config:
+          - name: "{{ item.name }}"
+            dot1q: 4
+            ipv4:
+              - address: "{{ item.ipv4 }}"
+      with_items:
+        -  "{{ sub_interfaces }}"
+
+### BIDIR PHANTOM RP ###
+    - name: Criando Interface Loopback
+      cisco.nxos.nxos_interfaces:
+        config:
+          - name: "{{ item.name }}"
+            description: "{{ item.description }}"
+            enabled: true
+      loop: "{{ loopback_interface }}"
+
+    - name: Associando a vRF na interface Loopback
+      cisco.nxos.nxos_vrf_interface:
+        vrf: "{{ vRF[0].name }}"
+        interface: "{{ item.name }}"
+      loop: "{{ loopback_interface }}"
+
+    - name: Adicionando IPv4 na interface loopback
+      cisco.nxos.nxos_l3_interfaces:
+        config:
+          - name: "{{ item.name }}"
+            ipv4:
+              - address: "{{ item.ipv4 }}"
+      with_items:
+        -  "{{ loopback_interface }}"
+
+## PIM RP ADDRESS ON VRF###
+    - name: Configurando RP Address na vRF
+      cisco.nxos.nxos_command:
+        commands:
+          - configure terminal
+          - vrf context {{ vRF[0].name }}
+          - ip pim rp-address {{ rp[0].address }} group-list {{ rp[0].grouplist[0] }} bidir
+          - ip pim rp-address {{ rp[0].address }} group-list {{ rp[0].grouplist[1] }} bidir
+
+## PIM SPARSE-MODE ###
+    - name: Adicionado PIM Sparse-mode nas interfaces
+      cisco.nxos.nxos_pim_interface:
+        interface: "{{ item.name }}"
+        sparse: true
+      with_items:
+        -  "{{ loopback_interface + wan_interfaces + sub_interfaces }}"
+
+## OSPF PROCESS ###
+    - name: Configurando o processo OSPF
+      cisco.nxos.nxos_ospfv2:
+        config:
+          processes:
+            - process_id: "{{ ospf[0].process_id }}"
+              vrfs:
+                - vrf: "{{ vRF[0].name }}"
+                  router_id: "{{ ospf[0].router_id }}"
+                  log_adjacency_changes: { detail: true, log: true }
+                  areas:
+                    - area_id: "{{ ospf[0].area_id }}"
+                      default_cost: 1
+        state: merged
+
+## OSPF INTERFACES ###
+    - name: Configurando OSPF nas interfaces
+      cisco.nxos.nxos_ospf_interfaces:
+        config:
+          - name: "{{ item.name }}"
+            address_family:
+              - afi: ipv4
+                mtu_ignore: true
+                network: "point-to-point"
+                processes:
+                  - process_id: "{{ ospf[0].process_id }}"
+                    area:
+                      area_id: "{{ ospf[0].area_id }}"
+      with_items:
+      -  "{{ loopback_interface  + wan_interfaces + sub_interfaces }}"
+
+## DHCP RELAY ###
+    - name: Configurando DHCP relay nas sub_interfaces
+      cisco.nxos.nxos_command:
+        commands:
+          - configure terminal
+          - interface {{ item.name }}
+          - ip dhcp relay address {{ dhcp_relay[0] }}
+          - ip dhcp relay address {{ dhcp_relay[1] }}
+      with_items:
+        -  "{{  sub_interfaces }}"

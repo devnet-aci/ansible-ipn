@@ -1,0 +1,54 @@
+features:
+  - lldp
+  - ospf
+  - pim
+  - dhcp
+
+vRF:
+  - name: "ACI_mpod"
+    description: "Ansible_test"
+
+physical_interfaces:
+  - name: Ethernet1/5
+    description: "SPINE1 uplink"
+
+  - name: Ethernet1/6
+    description: "SPINE2 uplink"
+
+wan_interfaces:
+  - name: Ethernet1/7
+    description: "LinkWAN_01 uplink"
+    ipv4: 10.0.0.1/24
+
+  - name: Ethernet1/8
+    description: "LinkWAN_02 uplink"
+    ipv4: 10.0.1.1/24
+
+sub_interfaces:
+  - name: Ethernet1/5.4
+    description: "TO SPINE01"
+    ipv4: 99.0.1.1/24
+
+  - name: Ethernet1/6.4
+    description: "TO SPINE02"
+    ipv4: 99.0.0.1/24
+
+loopback_interface:
+  - name: loopback 99
+    description: "BIDIR Phantom RP"
+    ipv4: 192.168.100.1/30
+
+rp:
+  - address: 192.168.100.2
+    grouplist:
+      - 225.0.0.0/15
+      - 239.255.255.240/28
+
+ospf:
+  - process_id: 1
+    router_id: 111.1.1.1
+    area_id: 0
+
+dhcp_relay:
+  - 10.0.0.1
+  - 10.0.0.2
